@@ -2,7 +2,7 @@ import numpy as np
 import improv_utils
 import matplotlib.pyplot as plt
 
-X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = improv_utils.load_dataset()
+X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = improv_utils.load_cats()
 
 def convert_y_labels(Y):
     return np.array((Y == 0) * 1)
@@ -10,12 +10,15 @@ def convert_y_labels(Y):
 def reshape_X(X):
     return np.reshape(X, (X.shape[0], -1)).T / 255.
 
-m_train = X_train_orig[0]
-m_test = X_test_orig[0]
+m_train = X_train_orig.shape[0]
+m_test = X_test_orig.shape[0]
+print("m_train", m_train, ". m_test", m_test)
+
 X_train = reshape_X(X_train_orig)
 X_test = reshape_X(X_test_orig)
-Y_train = convert_y_labels(Y_train_orig)
-Y_test = convert_y_labels(Y_test_orig)
+
+Y_train = Y_train_orig
+Y_test = Y_test_orig
 
 def sigmoid(z):
     return 1 / (1 + np.exp(-z))
@@ -60,7 +63,7 @@ def update_params(params, grads, learning_rate = 0.001):
 def model(X, Y, iterations = 1000):
     params = init_params(X.shape[0])
 
-    for i in range(0, iterations):
+    for i in range(0, iterations + 1):
         Y_hat = forward_step(params, X)
         cost = compute_cost(Y_hat, Y)
         grads = grad_descend(Y_hat, X, Y)
@@ -83,8 +86,13 @@ params = model(X_train, Y_train, iterations=10000)
 
 train_correctness = get_correctness(predict(X_train, params), Y_train)
 test_correctness = get_correctness(predict(X_test, params), Y_test)
+print("simple logistic regression model")
 print("train correctness: ", train_correctness, "%")
 print("test correctness: ", test_correctness, "%")
+
+#Cats vs noncats after 10K iterations
+#train correctness:  99.04306220095694 %
+#test correctness:  70.0 %
 
 #print(reshape_X(X_train_orig).shape)
 #print(convert_y_labels(Y_train_orig))

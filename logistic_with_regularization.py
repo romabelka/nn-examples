@@ -2,7 +2,7 @@ import numpy as np
 import improv_utils
 import matplotlib.pyplot as plt
 
-X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = improv_utils.load_dataset()
+X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = improv_utils.load_cats()
 
 def convert_y_labels(Y):
     return np.array((Y == 0) * 1)
@@ -10,12 +10,15 @@ def convert_y_labels(Y):
 def reshape_X(X):
     return np.reshape(X, (X.shape[0], -1)).T / 255.
 
-m_train = X_train_orig[0]
-m_test = X_test_orig[0]
+m_train = X_train_orig.shape[0]
+m_test = X_test_orig.shape[0]
+print("m_train", m_train, ". m_test", m_test)
+
 X_train = reshape_X(X_train_orig)
 X_test = reshape_X(X_test_orig)
-Y_train = convert_y_labels(Y_train_orig)
-Y_test = convert_y_labels(Y_test_orig)
+
+Y_train = Y_train_orig
+Y_test = Y_test_orig
 
 def sigmoid(z):
     return 1 / (1 + np.exp(-z))
@@ -80,12 +83,18 @@ def get_correctness(predict, Y):
     wrong = np.sum(np.logical_xor(predict, Y))
     return (1 - wrong / total) * 100
 
-params = model(X_train, Y_train, iterations=10000)
+params = model(X_train, Y_train, iterations=10000, lambd = 10)
 
 train_correctness = get_correctness(predict(X_train, params), Y_train)
 test_correctness = get_correctness(predict(X_test, params), Y_test)
+
+print("logistic regression with L2 regularization")
 print("train correctness: ", train_correctness, "%")
 print("test correctness: ", test_correctness, "%")
+
+#Cats vs noncats after 10K iterations, lambda = 1
+#train correctness:  99.04306220095694 %
+#test correctness:  72.0 %
 
 #print(reshape_X(X_train_orig).shape)
 #print(convert_y_labels(Y_train_orig))
