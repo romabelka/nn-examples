@@ -70,16 +70,30 @@ def compute_cost(Y_hat, Y, params, lambd = 0):
 
 #A, cache = forward_step(init_params(n_x, h_layers), h_layers, X_test)
 #print('cost', compute_cost(A, Y_test, init_params(n_x, h_layers), 100))
+def grad_relu(z):
+        if (z < 0):
+            return 0
+        else:
+            return 1
+
+grad_relu_vectorized = np.vectorize(grad_relu)
     
 def relu_backward(dA, Z):
     dZ = np.array(dA, copy=True) # just converting dz to a correct object.
-    
-    # When z <= 0, you should set dz to 0 as well. 
     dZ[Z <= 0] = 0
-    
-    assert (dZ.shape == Z.shape)
-    
-    return dZ
+    # When z <= 0, you should set dz to 0 as well.
+    #dg = grad_relu_vectorized(Z)
+        
+    return dZ 
+#z1 = np.array([[ 0.42839019,  0.64878091, -1.30098952],[ 0.82383117,  0.08844945,  0.61666537], [-0.09375732, -1.44571441, -1.16831914], [ 0.39752011, -0.97273188, -1.56195249]])
+#a1 = np.array([[-1.40585056, -0.40618279, -1.53453717], [ 1.27012538,  0.32156638,  1.70971679], [ 0.23618814, -0.09328677,  0.17604939], [ 2.06491307,  2.49656692, -0.22929405]])
+
+#print("dA")
+#print(a1)
+#print("Z")
+#print(z1)
+#print("dRelu")
+#print(relu_backward(a1, z1))
 
 def grad_descend(cache, X, Y, params, lambd):
     m = X.shape[1]
@@ -107,7 +121,7 @@ def update_params(params, grads, learning_rate = 0.001):
     
     return params
 
-def model(X, Y, iterations = 1000, lambd = 0.1, learning_rate=0.1, h_layers=[2, 5, 4]):
+def model(X, Y, iterations = 1000, lambd = 0.1, learning_rate=0.1, h_layers=[2, 5, 4], print_cost=False):
     params = init_params(X.shape[0], h_layers)
 
     for i in range(0, iterations):
@@ -115,7 +129,7 @@ def model(X, Y, iterations = 1000, lambd = 0.1, learning_rate=0.1, h_layers=[2, 
         cost = compute_cost(Y_hat, Y, params, lambd)
         grads = grad_descend(cache, X, Y, params, lambd)
         params = update_params(params, grads, learning_rate)
-        if (i % 100 == 0):
+        if (print_cost and i % 500 == 0):
             print("cost after " + str(i) + ": ", cost)
 
     return params
@@ -129,58 +143,77 @@ def get_correctness(predict, Y):
     wrong = np.sum(np.logical_xor(predict, Y))
     return (1 - wrong / total) * 100
 
-h_layers = [2, 7, 5]
-#params = model(X_train, Y_train, iterations=10, learning_rate = 1, lambd = 0, h_layers = h_layers)
-#theta, shapes = improv_utils.dict_to_vector(params)
-#restored = improv_utils.vector_to_dict(theta, shapes)
-#print(np.equal(restored["W1"], params["W1"]))
-#print(np.equal(restored["b2"], params["b2"]))
 
-def dubug_grad_descend(X, Y, epsilon = 0.000001, h_layers = h_layers, learning_rate = 0.1, lambd=0):
+def dubug_grad_descend(X, Y, epsilon = 1e-7, h_layers = [], learning_rate = 0.01, lambd=0):
     params = model(X, Y, iterations=2, learning_rate = learning_rate, lambd = lambd, h_layers = h_layers)
     theta, shapes = improv_utils.dict_to_vector(params)
 
     A, cache = forward_step(params, h_layers, X)
     grads, _ = improv_utils.dict_to_vector(grad_descend(cache, X, Y, params, lambd))
     grad_approx = np.zeros(theta.shape)
+    print(grads)
 
     theta, shapes = improv_utils.dict_to_vector(params)
 
     print(theta.shape, shapes)
     
-    for i in range(theta.shape[0]):
+    for i in range(10):
         theta_plus = np.copy(theta)
-        theta_plus[i][0] = theta_plus[i][0] + epsilon 
+        theta_plus[i][0] = theta_plus[i][0] + epsilon
+        plus_params = improv_utils.vector_to_dict(theta_plus, shapes)
     
         theta_minus = np.copy(theta)
         theta_minus[i][0] = theta_minus[i][0] - epsilon 
+        minus_params = improv_utils.vector_to_dict(theta_minus, shapes)
 
-        A_plus, _ = forward_step(improv_utils.vector_to_dict(theta_plus, shapes), h_layers, X)
-        A_minus, _ = forward_step(improv_utils.vector_to_dict(theta_minus, shapes), h_layers, X)
+        A_plus, _ = forward_step(plus_params, h_layers, X)
+        A_minus, _ = forward_step(minus_params, h_layers, X)
         
-        cost_plus = compute_cost(A_plus, Y, improv_utils.vector_to_dict(theta_plus, shapes), lambd)
-        cost_minus = compute_cost(A_minus, Y, improv_utils.vector_to_dict(theta_minus, shapes), lambd)
+        cost_plus = compute_cost(A_plus, Y, plus_params, lambd)
+        cost_minus = compute_cost(A_minus, Y, minus_params, lambd)
 
         grad_approx[i] = (cost_plus - cost_minus) / (2*epsilon)
+        print(grad_approx[i])
         if (i % 1000 == 0):
             print(i, " iterations")
 
     numerator = np.linalg.norm(grad_approx - grads)                                           
     denominator = np.linalg.norm(grads) + np.linalg.norm(grad_approx)
+    print("Grad Approx Norm", np.linalg.norm(grad_approx))
+    print("Grad Norm", np.linalg.norm(grads))
 
     return numerator / denominator
 
-print("grad Difference is:", dubug_grad_descend(X_train, Y_train))    
+#print("grad Difference is:", dubug_grad_descend(X_train, Y_train, learning_rate = 0.001))    
 
+def tune_hyper_params(architectures = [[10], [20], [10, 5], [20, 5]], lambds = [0, 0.1, 1], iterations = 5000):
+    for i in range(0, len(architectures)):
+        h_layers = architectures[i]
+        for j in range(0, len(lambds)):
+            lambd = lambds[j]
 
+            params = model(X_train, Y_train, iterations = iterations, learning_rate = 0.01, lambd = lambd, h_layers = h_layers, print_cost=True)
+            train_correctness = get_correctness(predict(X_train, h_layers, params), Y_train)
+            test_correctness = get_correctness(predict(X_test, h_layers, params), Y_test)
 
-#train_correctness = get_correctness(predict(X_train, h_layers, params), Y_train)
-#test_correctness = get_correctness(predict(X_test, h_layers, params), Y_test)
+            print("Deep NN. Hidden Layers: ", h_layers, ". Regularization lambda = ", lambd)
+            print("train correctness: ", train_correctness, "%")
+            print("test correctness: ", test_correctness, "%")
+            
+tune_hyper_params(architectures=[[20, 5]], lambds=[0], iterations=2000)
 
-#print("Deep NN without regularization")
-#print("train correctness: ", train_correctness, "%")
-#print("test correctness: ", test_correctness, "%")
-
-#Cats vs noncats after 10K iterations, lambda = 1
+#Deep NN. Hidden Layers:  [10, 5] . Regularization lambda =  0.1
 #train correctness:  65.55023923444976 %
 #test correctness:  34.0 %
+
+#Deep NN. Hidden Layers:  [20] . Regularization lambda =  1
+#train correctness:  100.0 %
+#test correctness:  72.0 %
+
+#Deep NN. Hidden Layers:  [20] . Regularization lambda =  0
+#train correctness:  100.0 %
+#test correctness:  74.0 %
+
+#Deep NN. Hidden Layers:  [10] . Regularization lambda =  1
+#train correctness:  100.0 %
+#test correctness:  74.0 %
