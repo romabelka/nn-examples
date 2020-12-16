@@ -78,3 +78,25 @@ def random_mini_batches(X, Y, mini_batch_size = 64, seed = 0):
 def convert_to_one_hot(Y, C):
     Y = np.eye(C)[Y.reshape(-1)].T
     return Y
+
+def dict_to_vector(dict):
+    theta = np.array([]).reshape(0,1)
+    shapes = {}
+    for key, value in dict.items():
+
+        theta = np.concatenate((theta, value.reshape(-1, 1)), axis=0)
+        shapes[key] = value.shape
+
+    return theta, shapes
+
+def vector_to_dict(theta, shapes):
+    dict = {}
+    pointer = 0
+
+    for key, value in shapes.items():
+        items = value[0] * value[1]
+        dict[key] = theta[pointer : pointer + items].reshape(value[0], value[1])
+        pointer = pointer + items
+    
+    return dict
+
