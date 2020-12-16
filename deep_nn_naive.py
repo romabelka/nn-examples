@@ -31,7 +31,7 @@ def init_params(n, h_layers):
     all_layers = [n] + h_layers + [1]
     params = {}
     for l in range(1, len(all_layers)):
-        params["W" + str(l)] = np.random.randn(all_layers[l], all_layers[l-1]) * 0.01
+        params["W" + str(l)] = np.random.randn(all_layers[l], all_layers[l-1]) * np.sqrt(2./all_layers[l-1])
         params["b" + str(l)] = np.zeros((all_layers[l], 1))
     return params
 
@@ -124,7 +124,7 @@ def update_params(params, grads, learning_rate = 0.001):
 def model(X, Y, iterations = 1000, lambd = 0.1, learning_rate=0.1, h_layers=[2, 5, 4], print_cost=False):
     params = init_params(X.shape[0], h_layers)
 
-    for i in range(0, iterations):
+    for i in range(0, iterations + 1):
         Y_hat, cache = forward_step(params, h_layers, X)
         cost = compute_cost(Y_hat, Y, params, lambd)
         grads = grad_descend(cache, X, Y, params, lambd)
@@ -186,26 +186,106 @@ def dubug_grad_descend(X, Y, epsilon = 1e-7, h_layers = [], learning_rate = 0.01
 
 #print("grad Difference is:", dubug_grad_descend(X_train, Y_train, learning_rate = 0.001))    
 
-def tune_hyper_params(architectures = [[10], [20], [10, 5], [20, 5]], lambds = [0, 0.1, 1], iterations = 5000):
+def tune_hyper_params(architectures = [[10], [20], [10, 5], [20, 5]], lambds = [0, 0.1, 1], iterations = 5000, learning_rate = 0.01):
     for i in range(0, len(architectures)):
         h_layers = architectures[i]
         for j in range(0, len(lambds)):
             lambd = lambds[j]
 
-            params = model(X_train, Y_train, iterations = iterations, learning_rate = 0.01, lambd = lambd, h_layers = h_layers, print_cost=True)
+            params = model(X_train, Y_train, iterations = iterations, learning_rate = learning_rate, lambd = lambd, h_layers = h_layers, print_cost=True)
             train_correctness = get_correctness(predict(X_train, h_layers, params), Y_train)
             test_correctness = get_correctness(predict(X_test, h_layers, params), Y_test)
 
-            print("Deep NN. Hidden Layers: ", h_layers, ". Regularization lambda = ", lambd)
+            print("Deep NN. Hidden Layers: ", h_layers, ". Regularization lambda = ", lambd, ". # of iterations: ", iterations)
             print("train correctness: ", train_correctness, "%")
             print("test correctness: ", test_correctness, "%")
             
-tune_hyper_params(architectures=[[20, 5]], lambds=[0], iterations=2000)
+tune_hyper_params(architectures=[[20, 10, 20, 10, 5]], lambds=[.1, .5, 1, 5], iterations=10000, learning_rate=0.001)
 
+
+#======= With He initialization===============
+#Deep NN. Hidden Layers:  [20, 10, 20, 10, 5] . Regularization lambda =  0 . # of iterations:  10000
+#train correctness:  100.0 %
+#test correctness:  80.0 %
+
+#Deep NN. Hidden Layers:  [20, 10, 20, 10, 5] . Regularization lambda =  0.1 . # of iterations:  10000
+#train correctness:  100.0 %
+#test correctness:  62.0 %
+
+#Deep NN. Hidden Layers:  [20, 10, 20, 10, 5] . Regularization lambda =  0.5 . # of iterations:  10000
+#train correctness:  100.0 %
+#test correctness:  68.0 %
+
+#Deep NN. Hidden Layers:  [20, 10, 20, 10, 5] . Regularization lambda =  1 . # of iterations:  10000
+#train correctness:  99.52153110047847 %
+#test correctness:  76.0 %
+
+#Deep NN. Hidden Layers:  [20, 10, 20, 10, 5] . Regularization lambda =  5 . # of iterations:  10000
+#train correctness:  100.0 %
+#test correctness:  74.0 %
+
+#Deep NN. Hidden Layers:  [20, 5] . Regularization lambda =  0, iterations = 2000
+#train correctness:  100.0 %
+#test correctness:  78.0 %
+
+#Deep NN. Hidden Layers:  [20, 5, 7] . Regularization lambda =  0 . # of iterations:  2000
+#train correctness:  100.0 %
+#test correctness:  78.0 %
+
+#Deep NN. Hidden Layers:  [20, 5, 7] . Regularization lambda =  0 . # of iterations:  10000
+#train correctness:  100.0 %
+#test correctness:  70.0 %
+
+#Deep NN. Hidden Layers:  [20, 5, 7] . Regularization lambda =  1 . # of iterations:  10000, learning_rate = 0.01
+#train correctness:  100.0 %
+#test correctness:  74.0 %
+
+#Deep NN. Hidden Layers:  [20, 5, 7] . Regularization lambda =  5 . # of iterations:  10000, learning_rate = 0.003
+#train correctness:  100.0 %
+#test correctness:  78.0 %
+
+#Deep NN. Hidden Layers:  [20, 5, 7] . Regularization lambda =  5 . # of iterations:  10000
+#train correctness:  100.0 %
+#test correctness:  76.0 %
+
+#Deep NN. Hidden Layers:  [20, 5, 7] . Regularization lambda =  1 . # of iterations:  2000
+#train correctness:  100.0 %
+#test correctness:  54.0 %
+
+#Deep NN. Hidden Layers:  [20, 5, 7] . Regularization lambda =  1 . # of iterations:  5000
+#train correctness:  100.0 %
+#test correctness:  76.0 %
+
+#Deep NN. Hidden Layers:  [20, 5, 7] . Regularization lambda =  10 . # of iterations:  5000
+#train correctness:  100.0 %
+#test correctness:  72.0 %
+
+#Deep NN. Hidden Layers:  [20, 5, 7] . Regularization lambda =  0.1 . # of iterations:  2000
+#train correctness:  100.0 %
+#test correctness:  65.99999999999999 %
+
+#Deep NN. Hidden Layers:  [20, 5, 7] . Regularization lambda =  0.1 . # of iterations:  5000
+#train correctness:  100.0 %
+#test correctness:  72.0 %
+
+
+#Deep NN. Hidden Layers:  [20, 5] . Regularization lambda =  1 . # of iterations:  2000
+#train correctness:  100.0 %
+#test correctness:  76.0 %
+
+#Deep NN. Hidden Layers:  [20, 5] . Regularization lambda =  0 . # of iterations:  2000
+#train correctness:  100.0 %
+#test correctness:  74.0 %
+
+
+#=========Random Initialization================
+#Quicly gets to plato, can't learn even with two layers
 #Deep NN. Hidden Layers:  [10, 5] . Regularization lambda =  0.1
 #train correctness:  65.55023923444976 %
 #test correctness:  34.0 %
 
+
+#==============Shallow Networks=======================
 #Deep NN. Hidden Layers:  [20] . Regularization lambda =  1
 #train correctness:  100.0 %
 #test correctness:  72.0 %
