@@ -4,7 +4,7 @@ def shuffle_set(X, Y):
     m = X.shape[1]
     permutation = list(np.random.permutation(m))
     shuffled_X = X[:, permutation]
-    shuffled_Y = Y[:, permutation].reshape((1,m))
+    shuffled_Y = Y[:, permutation].reshape((Y.shape[0], m))
 
     return shuffled_X, shuffled_Y
 
@@ -26,3 +26,10 @@ def get_minibatches(X, Y, size):
         minibatches.append((X_minibatch, Y_minibatch))
 
     return minibatches
+
+def convert_to_one_hot(Y, C):
+    Y = np.eye(C)[Y.reshape(-1)].T
+    return Y
+
+def convert_from_one_hot(Y):
+    return np.argmax(Y, axis=0)
