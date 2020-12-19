@@ -1,4 +1,5 @@
 __pycache__
 .vscode
-exo-clasify/datasets
 digits/datasets
+exo-clasify/datasets
+datasets
