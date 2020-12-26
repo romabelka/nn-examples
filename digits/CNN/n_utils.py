@@ -1,6 +1,36 @@
 import numpy as np
 MAX_EXP_ARG = 500
 
+def init_params(im_shape, hparams):
+    params = {}
+    n_h, n_w, n_c = im_shape
+    n_prev = n_c * n_h * n_w
+
+    for l_name, l_hparams in hparams.items():
+        params[l_name] = {}
+        l_type = l_hparams["type"]
+
+        if l_type == "conv":
+            n_f, f_h, f_w, f_c = l_hparams["filters"]
+            n_h, n_w, n_c = l_hparams["dimensions"]
+            params[l_name]["W"] = np.random.randn(n_f, f_h, f_w, f_c)
+            params[l_name]["b"] = np.zeros((n_f, 1))
+
+            n_prev = n_h * n_w * n_c
+
+        elif l_type == "fc" or l_type == "softmax":
+            print("n_prev", n_prev)
+            n_l = l_hparams["units"]
+            params[l_name]["W"] = np.random.randn(n_l, n_prev) * np.sqrt(2./n_prev)
+            params[l_name]["b"] = np.zeros((n_l, 1))
+            n_prev = n_l
+
+        elif l_type == "flatten":
+            params[l_name]["W"] = np.array([])
+            params[l_name]["b"] = np.array([])
+
+    return params
+
 def shuffle_set(X, Y):
     m = X.shape[1]
     permutation = list(np.random.permutation(m))
@@ -52,10 +82,10 @@ def load_data(dev = False, test_percent = 0.2):
 
     print("total: ", m, ". Train: ", m_train, ". Test: ", m_test)
 
-    X_train = X[:, :m_train]
+    X_train = X[:, :m_train].reshape((28, 28, m_train, 1)).transpose((2, 0, 1, 3))
     Y_train = Y[:, :m_train]
 
-    X_test = X[:, m_train :]
+    X_test = X[:, m_train :].reshape((28, 28, m_test, 1)).transpose((2, 0, 1, 3))
     Y_test = Y[:, m_train :]
 
     n_x = X.shape[0]
@@ -90,8 +120,63 @@ def forward_FC(params, h_layers, X):
 
     return A, cache
 
-def predict(X, h_layers, params):
-    a, _ = forward_FC(params, h_layers, X)
+def apply_filter_slice(X_slice, W):
+    return np.sum(X_slice * W)
+
+def forward_FC_Step(A_prev, W, b, units):
+    z = np.dot(W, A_prev) + b
+    A = relu(z)
+    return A
+
+def forward_FC_Softmax(A_prev, W, b):
+    z = np.dot(W, A_prev) + b
+    A = softmax(z)
+    return A
+
+def forward_Conv_Step(A_prev, weights, biases, stride = (1,1)):
+    m, n_H, n_W, _ = A_prev.shape
+    n_f, fx, fy, _ = weights.shape
+    sx, sy = stride
+    n_H1 = int((n_H - fy) / sy + 1)
+    n_W1 = int((n_W - fx) / sx + 1)
+
+    res = np.zeros((m, n_H1, n_W1, n_f))
+
+    for i in range(m):
+        for f in range(n_f):
+            W = weights[f]
+            b = biases[f]
+        for y in range(n_H1):
+            for x in range(n_W1):
+                Ai = A_prev[i]
+                res[i][y][x][f] = apply_filter_slice(Ai[y * sy : y*sy + fy, x * sx : x * sx + fx], W) + b
+    
+    return relu(res)
+
+def forward_full(X, params, hparams):
+    A = X
+    for l_name, l_params in params.items():
+        l_hparams = hparams[l_name]
+        l_type = l_hparams["type"]
+        W = l_params["W"]
+        b = l_params["b"]
+        
+        if (l_type == "conv"):
+            s = l_hparams["strides"]
+            A = forward_Conv_Step(A, W, b, s)
+        elif l_type == "fc":
+            units = l_hparams["units"]
+            A = forward_FC_Step(A, W, b, units)
+        elif l_type == "softmax":
+            A = forward_FC_Softmax(A, W, b)
+        elif l_type == "flatten":
+            A = A.reshape((A.shape[0], -1)).T
+
+    return A
+
+
+def predict(X, params, hparams):
+    a = forward_full(X, params, hparams)
     return (a == np.max(a, axis=0)) * 1
 
 def saveTestData(params, h_layers):
@@ -104,29 +189,7 @@ def saveTestData(params, h_layers):
 
     np.savetxt('digits/datasets/submition.csv', submit_data.astype(int), fmt='%i', delimiter=',', header='ImageId,Label')
 
-def apply_filter_slice(X_slice, W):
-    return np.sum(X_slice * W)
-
-def conv_step(X, weights, biases, stride = (1,1)):
-    m, n_H, n_W, _ = X.shape
-    n_f, fx, fy, _ = weights.shape
-    sx, sy = stride
-    n_H1 = int((n_H - fy) / sy + 1)
-    n_W1 = int((n_W - fx) / sx + 1)
-
-    res = np.zeros((m, n_H1, n_W1, n_f))
-
-    for i in range(X.shape[0]):
-        for f in range(n_f):
-            W = weights[f]
-            b = biases[f]
-        for y in range(n_H1):
-            for x in range(n_W1):
-                res[i][y][x][f] = apply_filter_slice(X[i][y * sy : y*sy + fy, x * sx : x * sx + fx], W) + b
-    
-    return res
-        
-
+#===========================================
 test_im = np.array([
     [1, 2, 3, 50, 10, 0],
     [1, 2, 3, 60, 20, 0],
@@ -148,5 +211,28 @@ test_X = np.stack((test_im, test_im, test_im, test_im, test_im), axis=0)
 weights = np.stack((test_W, test_W, test_W),)
 biases = np.stack(([0], [1], [2]))
 
-print(test_X.shape)
-print(conv_step(test_X, weights, biases, stride=(2,2)).shape)
+hparams = {
+    "conv-1": {
+        "type": "conv",
+        "strides": (1,1),
+        "padding": (0,0),
+        "filters": (16, 3, 3, 2),
+        "dimensions": (26, 26, 16)
+    },
+    "flatten": {
+        "type": "flatten"
+    },
+    "fc-1": {
+        "type": "fc",
+        "units": 256,
+    },
+    "fc-2": {
+        "type": "fc",
+        "units": 256,
+    },
+    "softmax": {
+        "type": "softmax",
+        "units": 10
+    }
+}
+params = init_params(test_im.shape, hparams)

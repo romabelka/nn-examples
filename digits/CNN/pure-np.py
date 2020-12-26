@@ -1,29 +1,49 @@
 import numpy as np
 import n_utils
-from n_utils import softmax, relu, forward_FC, predict
+from n_utils import softmax, relu, forward_full, predict, init_params
 import matplotlib.pyplot as plt
 
 X_train, Y_train, X_test, Y_test, n_x, m, m_test, m_train, n_labels = n_utils.load_data(dev=True)
-print("m_train", m_train, ". m_test", m_test)
+print("m_train", m_train, ". m_test", m_test, X_train.shape)
 
-def init_params(n_x, h_layers, n_l):
-    all_layers = [n_x] + h_layers + [n_l]
-    params = {}
-    for l in range(1, len(all_layers)):
-        params["W" + str(l)] = np.random.randn(all_layers[l], all_layers[l-1]) * np.sqrt(2./all_layers[l-1])
-        params["b" + str(l)] = np.zeros((all_layers[l], 1))
-    return params
+hparams = {
+    "conv-1": {
+        "type": "conv",
+        "strides": (1,1),
+        "padding": (0,0),
+        "filters": (16, 3, 3, 2),
+        "dimensions": (26, 26, 16)
+    },
+    "flatten": {
+        "type": "flatten"
+    },
+    "fc-1": {
+        "type": "fc",
+        "units": 256,
+    },
+    "fc-2": {
+        "type": "fc",
+        "units": 256,
+    },
+    "softmax": {
+        "type": "softmax",
+        "units": 10
+    }
+}
+
+#params = init_params((28, 28, 1), hparams)
 
 def compute_cost(Y_hat, Y, params, lambd = 0):
+    print(Y_hat)
     m = Y.shape[1]
     Y_hat[Y_hat == 0] = 1e-10
     Y_hat[Y_hat == 1] = 1 - 1e-10
     cost = -1/m * np.sum(Y * np.log(Y_hat))
 
-    depth = len(params) // 2
+    depth = len(params)
     reg = 0
-    for l in range(1, depth + 1):
-        reg += np.linalg.norm(params["W" + str(l)]) ** 2 * lambd / (2 * m)
+    #for l in range(1, depth + 1):
+    #    reg += np.linalg.norm(params["W" + str(l)]) ** 2 * lambd / (2 * m)
 
     return cost + reg
 
@@ -128,8 +148,8 @@ def model_adam(X, Y, num_epochs, lambd, learning_rate, h_layers, minibatch_size)
     return params
 
 
-def model(X, Y, num_epochs = 500, lambd = 0.1, learning_rate=0.1, h_layers=[2, 5, 4], minibatch_size=128):
-    params = init_params(X.shape[0], h_layers, n_labels)
+def model(X, Y, hparams, num_epochs = 500, lambd = 0.1, learning_rate=0.1, minibatch_size=64):
+    params = init_params((28, 28, 1), hparams)
     minibatches = n_utils.get_minibatches(X, Y, minibatch_size)
     l_dacay_rate = 0.001
 
@@ -138,15 +158,12 @@ def model(X, Y, num_epochs = 500, lambd = 0.1, learning_rate=0.1, h_layers=[2, 5
 
         for minibatch in minibatches:
             X_mini, Y_mini = minibatch
-            Y_hat, cache = forward_FC(params, h_layers, X_mini)
+            Y_hat = forward_full(X_mini, params, hparams)
             cost_total += compute_cost(Y_hat, Y_mini, params, lambd)
-            grads = grad_descend(cache, X_mini, Y_mini, params, lambd)
-            params = update_params(params, grads, learning_rate / (1 + l_dacay_rate * i))
-            if (np.isnan(cost_total)):
-                print("Nan after iteration: ", i, grads, params)
-                return params
-
-        if (i % 100 == 0):
+ #           grads = grad_descend(cache, X_mini, Y_mini, params, lambd)
+#            params = update_params(params, grads, learning_rate / (1 + l_dacay_rate * i))
+ 
+        if (i % 1 == 0):
             print("cost after " + str(i) + ": ", cost_total, ". Learning rate: ", learning_rate / (1 + l_dacay_rate * i))
 
     return params
@@ -159,29 +176,24 @@ def get_correctness(predict, Y):
     acuracy = 100 * np.sum(np.equal(predict_res, truth)) / total
     return acuracy
 
-def tune_hyper_params(architectures = [[10], [20], [10, 5], [20, 5]], lambds = [0, 0.1, 1], iterations = 1000, learning_rate = 0.001):
-    for i in range(0, len(architectures)):
-        h_layers = architectures[i]
-        for j in range(0, len(lambds)):
-            lambd = lambds[j]
+def tune_hyper_params(lambds = [0, 0.1, 1], iterations = 1000, learning_rate = 0.001):
+    for j in range(0, len(lambds)):
+        lambd = lambds[j]
 
-            params = model_adam(X_train, Y_train, num_epochs = iterations, minibatch_size = 128, learning_rate = learning_rate, lambd = lambd, h_layers = h_layers)            
-            #params = model(X_train, Y_train, num_epochs = iterations, minibatch_size = 128, learning_rate = learning_rate, lambd = lambd, h_layers = h_layers)
-            train_correctness = get_correctness(predict(X_train, h_layers, params), Y_train)
-            test_correctness = get_correctness(predict(X_test, h_layers, params), Y_test)
+        #params = model_adam(X_train, Y_train, num_epochs = iterations, minibatch_size = 128, learning_rate = learning_rate, lambd = lambd, h_layers = h_layers)            
+        params = model(X_train, Y_train, hparams, num_epochs = iterations, minibatch_size = 64, learning_rate = learning_rate, lambd = lambd)
+        train_correctness = get_correctness(predict(X_train, params, hparams), Y_train)
+        test_correctness = get_correctness(predict(X_test, params, hparams), Y_test)
 
-            print("Deep NN. Hidden Layers: ", h_layers, ". Regularization lambda = ", lambd, ". # of iterations: ", iterations)
-            print("TRAIN. Correctness: ", train_correctness, " %")
-            print("TEST. Correctness: ", test_correctness, " %")
+        print("TRAIN. Correctness: ", train_correctness, " %")
+        print("TEST. Correctness: ", test_correctness, " %")
             
-h_layers = [30, 20, 15, 10, 10, 5]
+tune_hyper_params(lambds=[0], iterations=1, learning_rate=0.001)
 
-#tune_hyper_params(architectures=[h_layers], lambds=[0.7], iterations=150, learning_rate=0.001)
-
-params = model_adam(X_train, Y_train, num_epochs = 100, minibatch_size = 64, learning_rate = 0.001, lambd = 0.7, h_layers = h_layers)            
+#params = model_adam(X_train, Y_train, num_epochs = 100, minibatch_size = 64, learning_rate = 0.001, lambd = 0.7, h_layers = h_layers)            
 
 def imshow(X, i):
-    plt.imshow(X[:, i].reshape(28,28))
+    plt.imshow(X[i])
     plt.show()
 
 
