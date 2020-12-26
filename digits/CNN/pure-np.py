@@ -34,13 +34,12 @@ hparams = {
 #params = init_params((28, 28, 1), hparams)
 
 def compute_cost(Y_hat, Y, params, lambd = 0):
-    print(Y_hat)
     m = Y.shape[1]
     Y_hat[Y_hat == 0] = 1e-10
     Y_hat[Y_hat == 1] = 1 - 1e-10
     cost = -1/m * np.sum(Y * np.log(Y_hat))
 
-    depth = len(params)
+    #depth = len(params)
     reg = 0
     #for l in range(1, depth + 1):
     #    reg += np.linalg.norm(params["W" + str(l)]) ** 2 * lambd / (2 * m)
@@ -53,30 +52,73 @@ def relu_backward(dA, Z):
         
     return dZ 
 
-def grad_descend(cache, X, Y, params, lambd):
-    m = X.shape[1]
-    L = len(cache) // 2 - 1
-    grads = {}
-    A = cache["A" + str(L)]
-    dZ = A - Y # (n_l,m)
+def back_softmax(A_prev, A, Y, W, b):
+    m = A.shape[1]
+    dZ = A - Y
+    dW = np.dot(dZ, A_prev.T) / m
+    db = np.sum(dZ, axis=1, keepdims=True) / m
 
-    for l in range(L, 0, -1):
-        A_prev = cache["A" + str(l - 1)]
-        W = params["W" + str(l)]
-        dw = np.dot(dZ, A_prev.T) / m + W * lambd / m # (n_l, m) * (m, n) = (n_l, n)
-        db = np.sum(dZ, axis=1, keepdims=True) / m
-            
-        dA = np.dot(W.T, dZ)
-        grads["dW" + str(l)] = dw 
-        grads["db" + str(l)] = db
-        dZ = relu_backward(dA, cache["Z" + str(l - 1)])
+    dA = np.dot(W.T, dZ)
+    
+    return dW, db, dA
+
+def back_FC(A_prev, Z, dA, W, b):
+    m = A_prev.shape[1]
+    dZ = relu_backward(dA, Z)
+    dW = np.dot(dZ, A_prev.T) / m
+    db = np.sum(dZ, axis=1, keepdims=True) / m
+        
+    dA = np.dot(W.T, dZ)
+    return dW, db, dA
+
+#TODO
+def back_flatten(W):
+    dW = np.array([])
+    db = np.array([])
+    dA = np.array([])
+    return dW, db, dA
+
+def back_conv(W, b):
+    dW = np.zeros(W.shape)
+    db = np.zeros(b.shape)
+    dA = np.array([])
+
+    return dW, db, dA
+
+
+def compute_grads(cache, Y, params, hparams):
+    grads = {}
+    dW = db = dA = np.array([])
+
+    for l_name, l_hparams in reversed(hparams.items()):
+        l_type = l_hparams["type"]
+        W = params[l_name]["W"]
+        b = params[l_name]["b"]
+        A = cache[l_name]["A"]
+        Z = cache[l_name]["Z"]
+        A_prev = cache[l_name]["A_prev"]
+
+        if l_type == "softmax":
+            dW, db, dA = back_softmax(A_prev, A, Y, W, b)
+        elif l_type == "fc":
+            dW, db, dA = back_FC(A_prev, Z, dA, W, b)
+        elif l_type == "flatten":
+            dW, db, dA = back_flatten(W)
+        elif l_type == "conv":
+            dW, db, dA = back_conv(W, b)
+        
+        grads[l_name] = {
+            "dW": dW,
+            "db": db
+        }
 
     return grads
 
+
 def update_params(params, grads, learning_rate):
-    for l in range(1, len(params) // 2 + 1):
-        params["W" + str(l)] = params["W" + str(l)] - learning_rate * grads["dW" + str(l)]
-        params["b" + str(l)] = params["b" + str(l)] - learning_rate * grads["db" + str(l)]
+    for l_name, l_grads in grads.items():
+        params[l_name]["W"] -= learning_rate * l_grads["dW"]
+        params[l_name]["b"] -= learning_rate * l_grads["db"]
     
     return params
 
@@ -158,10 +200,10 @@ def model(X, Y, hparams, num_epochs = 500, lambd = 0.1, learning_rate=0.1, minib
 
         for minibatch in minibatches:
             X_mini, Y_mini = minibatch
-            Y_hat = forward_full(X_mini, params, hparams)
+            Y_hat, cache = forward_full(X_mini, params, hparams)
             cost_total += compute_cost(Y_hat, Y_mini, params, lambd)
- #           grads = grad_descend(cache, X_mini, Y_mini, params, lambd)
-#            params = update_params(params, grads, learning_rate / (1 + l_dacay_rate * i))
+            grads = compute_grads(cache, Y_mini, params, hparams)
+            params = update_params(params, grads, learning_rate / (1 + l_dacay_rate * i))
  
         if (i % 1 == 0):
             print("cost after " + str(i) + ": ", cost_total, ". Learning rate: ", learning_rate / (1 + l_dacay_rate * i))
@@ -188,7 +230,7 @@ def tune_hyper_params(lambds = [0, 0.1, 1], iterations = 1000, learning_rate = 0
         print("TRAIN. Correctness: ", train_correctness, " %")
         print("TEST. Correctness: ", test_correctness, " %")
             
-tune_hyper_params(lambds=[0], iterations=1, learning_rate=0.001)
+tune_hyper_params(lambds=[0], iterations=5, learning_rate=0.001)
 
 #params = model_adam(X_train, Y_train, num_epochs = 100, minibatch_size = 64, learning_rate = 0.001, lambd = 0.7, h_layers = h_layers)            
 

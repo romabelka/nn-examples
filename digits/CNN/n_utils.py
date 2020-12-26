@@ -19,7 +19,6 @@ def init_params(im_shape, hparams):
             n_prev = n_h * n_w * n_c
 
         elif l_type == "fc" or l_type == "softmax":
-            print("n_prev", n_prev)
             n_l = l_hparams["units"]
             params[l_name]["W"] = np.random.randn(n_l, n_prev) * np.sqrt(2./n_prev)
             params[l_name]["b"] = np.zeros((n_l, 1))
@@ -124,14 +123,14 @@ def apply_filter_slice(X_slice, W):
     return np.sum(X_slice * W)
 
 def forward_FC_Step(A_prev, W, b, units):
-    z = np.dot(W, A_prev) + b
-    A = relu(z)
-    return A
+    Z = np.dot(W, A_prev) + b
+    A = relu(Z)
+    return Z, A
 
 def forward_FC_Softmax(A_prev, W, b):
-    z = np.dot(W, A_prev) + b
-    A = softmax(z)
-    return A
+    Z = np.dot(W, A_prev) + b
+    A = softmax(Z)
+    return Z, A
 
 def forward_Conv_Step(A_prev, weights, biases, stride = (1,1)):
     m, n_H, n_W, _ = A_prev.shape
@@ -151,32 +150,40 @@ def forward_Conv_Step(A_prev, weights, biases, stride = (1,1)):
                 Ai = A_prev[i]
                 res[i][y][x][f] = apply_filter_slice(Ai[y * sy : y*sy + fy, x * sx : x * sx + fx], W) + b
     
-    return relu(res)
+    return res, relu(res)
 
 def forward_full(X, params, hparams):
     A = X
+    Z = []
+    cache = {}
     for l_name, l_params in params.items():
         l_hparams = hparams[l_name]
         l_type = l_hparams["type"]
         W = l_params["W"]
         b = l_params["b"]
-        
-        if (l_type == "conv"):
+        A_prev = A
+        if l_type == "conv":
             s = l_hparams["strides"]
-            A = forward_Conv_Step(A, W, b, s)
+            Z, A = forward_Conv_Step(A, W, b, s)
         elif l_type == "fc":
             units = l_hparams["units"]
-            A = forward_FC_Step(A, W, b, units)
+            Z, A = forward_FC_Step(A, W, b, units)
         elif l_type == "softmax":
-            A = forward_FC_Softmax(A, W, b)
+            Z, A = forward_FC_Softmax(A, W, b)
         elif l_type == "flatten":
-            A = A.reshape((A.shape[0], -1)).T
+            Z = A = A.reshape((A.shape[0], -1)).T
+        
+        cache[l_name] = {
+            "Z": Z,
+            "A": A,
+            "A_prev": A_prev
+        }
 
-    return A
+    return A, cache
 
 
 def predict(X, params, hparams):
-    a = forward_full(X, params, hparams)
+    a, _ = forward_full(X, params, hparams)
     return (a == np.max(a, axis=0)) * 1
 
 def saveTestData(params, h_layers):
